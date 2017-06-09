@@ -8,8 +8,15 @@ package com.bodastage.boda_nokiacmdataparser;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,6 +33,13 @@ import javax.xml.stream.events.XMLEvent;
 
 public class NokiaCMDataParser 
 {
+    
+    /**
+     * Current version
+     * 
+     * @since  1.1.0
+     */
+    final static public String VERSION = "1.1.0";
     
     /**
      * Tracks Managed Object attributes to write to file. This is dictated by 
@@ -130,6 +144,20 @@ public class NokiaCMDataParser
      */
     private String pAttrName = null;
 
+
+    /**
+     * The file/directory to be parsed.
+     *
+     * @since 1.1.0
+     */
+    private String dataSource;
+    
+    /**
+     * Parser states. Currently there are only 2: extraction and parsing
+     * 
+     * @since 1.1.0
+     */
+    private int parserState = ParserStates.EXTRACTING_PARAMETERS;
     
     public static void main( String[] args )
     {
@@ -155,9 +183,9 @@ public class NokiaCMDataParser
                 System.err.println("ERROR: Cannot write to output directory!");
                 System.exit(1);            
             }
-
+        
             NokiaCMDataParser parser = new NokiaCMDataParser();
-            parser.setFileName(filename);
+            parser.setDataSource(filename);
             parser.setOutputDirectory(outputDirectory);
             parser.parse();
             parser.printExecutionTime();
@@ -174,25 +202,128 @@ public class NokiaCMDataParser
      * @since 1.0.0
      * @version 1.0.0
      */
-    static public void showHelp(){
-        System.out.println("boda-nokiacmdataparser 1.0.0. Copyright (c) 2017 Bodastage(http://www.bodastage.com)");
-        System.out.println("Parses Nokia configuration configuration data file XML to csv.");
-        System.out.println("Usage: java -jar boda-nokiacmdataparser.jar <fileToParse.xml> <outputDirectory>");
+    public static void showHelp(){
+        System.out.println("boda-nokiacmdataparser " + VERSION + ". Copyright (c) 2017 Bodastage(http://www.bodastage.com)");
+        System.out.println("Parses Nokia configuration management XML data files to csv.");
+        System.out.println("Usage: java -jar boda-nokiacmdataparser.jar <fileToParse.xml|Directory> <outputDirectory>");
     }
     
     
     /**
-     * The parser's entry point.
+     * Determines if the source data file is a regular file or a directory and 
+     * parses it accordingly
+     * 
+     * @since 1.1.0
+     * @version 1.0.0
+     * @throws XMLStreamException
+     * @throws FileNotFoundException
+     * @throws UnsupportedEncodingException
+     */
+    public void processFileOrDirectory() throws IOException, XMLStreamException {
+        //this.dataFILe;
+        Path file = Paths.get(this.dataSource);
+        boolean isRegularExecutableFile = Files.isRegularFile(file)
+                & Files.isReadable(file);
+
+        boolean isReadableDirectory = Files.isDirectory(file)
+                & Files.isReadable(file);
+
+        if (isRegularExecutableFile) {
+            this.setFileName(this.dataSource);
+            baseFileName =  getFileBasename(this.dataFile);
+            
+            if( parserState == ParserStates.EXTRACTING_PARAMETERS){
+                System.out.print("Extracting parameters from " + this.baseFileName + "...");
+            }else{
+                System.out.print("Parsing " + this.baseFileName + "...");
+            }
+                    
+            this.parseFile(this.dataSource);
+            
+            if( parserState == ParserStates.EXTRACTING_PARAMETERS){
+                 System.out.println("Done.");
+            }else{
+                System.out.println("Done.");
+                //System.out.println(this.baseFileName + " successfully parsed.\n");
+            }
+        }
+
+        if (isReadableDirectory) {
+
+            File directory = new File(this.dataSource);
+
+            //get all the files from a directory
+            File[] fList = directory.listFiles();
+
+            for (File f : fList) {
+                this.setFileName(f.getAbsolutePath());
+                try {
+                    baseFileName =  getFileBasename(this.dataFile);
+                    if( parserState == ParserStates.EXTRACTING_PARAMETERS){
+                        System.out.print("Extracting parameters from " + this.baseFileName + "...");
+                    }else{
+                        System.out.print("Parsing " + this.baseFileName + "...");
+                    }
+                    
+                    //Parse
+                    this.parseFile(f.getAbsolutePath());
+                    if( parserState == ParserStates.EXTRACTING_PARAMETERS){
+                         System.out.println("Done.");
+                    }else{
+                        System.out.println("Done.");
+                        //System.out.println(this.baseFileName + " successfully parsed.\n");
+                    }
+                   
+                } catch (Exception e) {
+                    System.out.println(e.getMessage());
+                    System.out.println("Skipping file: " + this.baseFileName + "\n");
+                }
+            }
+        }
+
+    }
+    
+    /**
+     * Parser entry point 
+     * 
+     * @throws XMLStreamException
+     * @throws FileNotFoundException
+     * @throws UnsupportedEncodingException 
+     * 
+     * @since 1.1.1
+     */
+    public void parse() throws IOException, XMLStreamException {
+        //Extract parameters
+        if (parserState == ParserStates.EXTRACTING_PARAMETERS) {
+            processFileOrDirectory();
+
+            parserState = ParserStates.EXTRACTING_VALUES;
+        }
+
+        //Extracting values
+        if (parserState == ParserStates.EXTRACTING_VALUES) {
+            processFileOrDirectory();
+            parserState = ParserStates.EXTRACTING_DONE;
+        }
+        
+        closeMOPWMap();
+    }
+    
+    /**
+     * Parses the CM XML file.
+     * 
+     * @since 1.1.0
+     * @version 1.0.0
      * 
      */
-    public void parse() 
+    public void parseFile( String inputFilename ) 
     throws XMLStreamException, FileNotFoundException, UnsupportedEncodingException
     {
             XMLInputFactory factory = XMLInputFactory.newInstance();
 
             XMLEventReader eventReader = factory.createXMLEventReader(
-                    new FileReader(this.dataFile));
-            baseFileName = getFileBasename(this.dataFile);
+                    new FileReader(inputFilename));
+            baseFileName = getFileBasename(inputFilename);
 
             while (eventReader.hasNext()) {
                 XMLEvent event = eventReader.nextEvent();
@@ -387,40 +518,61 @@ public class NokiaCMDataParser
             String paramNames = "FileName,dateTime,version,distName,id";
             String paramValues = baseFileName+ "," + dateTime + ","+moVersion+","+moDistName+","+moId;
             
-            if( !moColumns.containsKey(moClassName)){
+            if(ParserStates.EXTRACTING_PARAMETERS == parserState){
+
+                if(!moColumns.containsKey(moClassName)){
+                    moColumns.put(moClassName, new Stack());
+                }
                 
-                String moiFile = outputDirectory + File.separatorChar + moClassName +  ".csv";
-                moiPrintWriters.put(moClassName, new PrintWriter(moiFile));
+                Stack columns = moColumns.get(moClassName);
                 
                 Iterator<Map.Entry<String, String>> iter = 
                         moiParameterValueMap.entrySet().iterator();
-                Stack columns = new Stack();
+                
+                //Iterate through the columns and add the missing columns
                 while(iter.hasNext()){
                     Map.Entry<String, String> me = iter.next();
-                    columns.add(me.getKey());
-                    paramNames += "," + me.getKey();
+                    if(!columns.contains(me.getKey())){
+                        columns.add(me.getKey());
+                    }
                 }
                 
-                moColumns.put(moClassName, columns);
-                moiPrintWriters.get(moClassName).println(paramNames);
             }
+            
+            
+            if(ParserStates.EXTRACTING_VALUES == parserState){
+                Stack columns  = moColumns.get(moClassName);
                 
-            Iterator<Map.Entry<String, String>> iter = 
-                        moiParameterValueMap.entrySet().iterator();
-            Stack columns = moColumns.get(moClassName);
-            
-            for(int i=0; i < columns.size(); i++){
-                String pName = columns.get(i).toString();
-                if( moiParameterValueMap.containsKey(pName)){
-                    paramValues += "," + toCSVFormat(moiParameterValueMap.get(pName));
-                }else{
-                    paramValues += ",";
+                //Create print writer and write the file header to it
+                if( !moiPrintWriters.containsKey(moClassName)){
+
+                    String moiFile = outputDirectory + File.separatorChar + moClassName +  ".csv";
+                    moiPrintWriters.put(moClassName, new PrintWriter(moiFile));
+
+                    
+                    
+                    for(int i =0; i < columns.size(); i++){
+                        paramNames += "," + columns.get(i);
+                    }
+                    moiPrintWriters.get(moClassName).println(paramNames);
                 }
+                
+                //Extract parameter values
+                for(int i=0; i < columns.size(); i++){
+                    String pName = columns.get(i).toString();
+                    if( moiParameterValueMap.containsKey(pName)){
+                        paramValues += "," + toCSVFormat(moiParameterValueMap.get(pName));
+                    }else{
+                        paramValues += ",";
+                    }
+                }
+                
+                //Write values to file
+                PrintWriter pw = moiPrintWriters.get(moClassName);
+                pw.println(paramValues);
             }
-            
-            PrintWriter pw = moiPrintWriters.get(moClassName);
-            pw.println(paramValues);
-            
+
+               
             moiParameterValueMap.clear();
             moClassName = null;
         }
@@ -451,8 +603,7 @@ public class NokiaCMDataParser
         if(qName.equals("list")){
             listName = null; 
         }
-        
-        
+                
     }
     
     
@@ -556,6 +707,17 @@ public class NokiaCMDataParser
      */
     public void setFileName(String filename ){
         this.dataFile = filename;
+    }
+    
+    /**
+     * Set name of file/directory to parser.
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @param dataSource 
+     */
+    public void setDataSource(String dataSource ){
+        this.dataSource = dataSource;
     }
     
 }
