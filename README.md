@@ -35,7 +35,22 @@ Below is the expected format of the input file:
 </raml>
 ```
 # Usage
-java -jar  nokiacmdataparser.jar cmdata.xml outputDirectory
+```
+usage: java -jar boda-nokiacmdataparser.jar
+Parses Nokia RAML20 configuration management XML data files to csv.
+
+ -c,--parameter-config <PARAMETER_CONFIG>   parameter configuration file
+ -h,--help                                  show help
+ -i,--input-file <INPUT_FILE>               input file or directory name
+ -o,--output-directory <OUTPUT_DIRECTORY>   output directory name
+ -p,--extract-parameters                    extract only the managed
+                                            objects and parameters
+ -v,--version                               display version
+
+Examples:
+java -jar boda-nokiacmdataparser.jar -i raml20_dump.xml -o out_folder
+java -jar boda-nokiacmdataparser.jar -i input_folder -o out_folder
+```
 
 # Download and installation
 The lastest compiled jar file is availabled in the dist directory. Alternatively, download it directly from [here](https://github.com/bodastage/boda-nokiacmdataparser/raw/master/dist/boda-nokiacmdataparser.jar).

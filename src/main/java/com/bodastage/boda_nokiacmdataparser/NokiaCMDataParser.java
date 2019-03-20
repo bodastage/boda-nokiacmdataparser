@@ -275,10 +275,10 @@ public class NokiaCMDataParser
                 inputFile == null || 
                 ( outputDirectory == null && onlyExtractParameters == false) ){
                      HelpFormatter formatter = new HelpFormatter();
-                     String header = "Parses Nokia RAML2.0 configuration management XML data files to csv.\n\n";
+                     String header = "Parses Nokia RAML20 configuration management XML data files to csv.\n\n";
                      String footer = "\n";
                      footer += "Examples: \n";
-                     footer += "java -jar boda-nokiacmdataparser.jar -i bulkcm_dump.xml -o out_folder\n";
+                     footer += "java -jar boda-nokiacmdataparser.jar -i raml20_dump.xml -o out_folder\n";
                      footer += "java -jar boda-nokiacmdataparser.jar -i input_folder -o out_folder\n";
                      footer += "java -jar boda-nokiacmdataparser.jar -i input_folder -p\n";
                      footer += "java -jar boda-nokiacmdataparser.jar -i input_folder -p -m\n";
