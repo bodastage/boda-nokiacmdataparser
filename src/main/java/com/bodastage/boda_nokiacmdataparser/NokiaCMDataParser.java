@@ -5,6 +5,7 @@ package com.bodastage.boda_nokiacmdataparser;
  *
  */
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -30,6 +31,13 @@ import javax.xml.stream.events.Characters;
 import javax.xml.stream.events.EndElement;
 import javax.xml.stream.events.StartElement;
 import javax.xml.stream.events.XMLEvent;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
 
 public class NokiaCMDataParser 
 {
@@ -39,7 +47,7 @@ public class NokiaCMDataParser
      * 
      * @since  1.1.0
      */
-    final static public String VERSION = "1.1.0";
+    final static public String VERSION = "2.2.0";
     
     /**
      * Tracks Managed Object attributes to write to file. This is dictated by 
@@ -159,42 +167,194 @@ public class NokiaCMDataParser
      */
     private int parserState = ParserStates.EXTRACTING_PARAMETERS;
     
+    /**
+     * File containing a list of parameters to export
+     * 
+     */
+    private String parameterFile = null;
+    
+    /**
+     * Extract managed objects and their parameters
+     */
+    private Boolean extractParametersOnly = false;
+
+    /**
+     * Set the parameter file name 
+     * 
+     * @param filename 
+     */
+    public void setParameterFile(String filename){
+        parameterFile = filename;
+    }
+    
+    
+    public void setExtractParametersOnly(Boolean bool){
+        extractParametersOnly = bool;
+    }
+     
     public static void main( String[] args )
     {
+        
+       //Define
+       Options options = new Options();
+       CommandLine cmd = null;
+       String outputDirectory = null;   
+       String inputFile = null;
+       String parameterConfigFile = null;
+       Boolean onlyExtractParameters = false;
+       Boolean showHelpMessage = false;
+       Boolean showVersion = false;
+       
+      try{ 
+            options.addOption( "p", "extract-parameters", false, "extract only the managed objects and parameters" );
+            options.addOption( "v", "version", false, "display version" );
+            options.addOption( Option.builder("i")
+                    .longOpt( "input-file" )
+                    .desc( "input file or directory name")
+                    .hasArg()
+                    .argName( "INPUT_FILE" ).build());
+            options.addOption(Option.builder("o")
+                    .longOpt( "output-directory" )
+                    .desc( "output directory name")
+                    .hasArg()
+                    .argName( "OUTPUT_DIRECTORY" ).build());
+            options.addOption(Option.builder("c")
+                    .longOpt( "parameter-config" )
+                    .desc( "parameter configuration file")
+                    .hasArg()
+                    .argName( "PARAMETER_CONFIG" ).build() );
+            options.addOption( "h", "help", false, "show help" );
+            
+            //Parse command line arguments
+            CommandLineParser parser = new DefaultParser();
+            cmd = parser.parse( options, args);
+
+            if( cmd.hasOption("h")){
+                showHelpMessage = true;
+            }
+
+            if( cmd.hasOption("v")){
+                showVersion = true;
+            }
+            
+            if(cmd.hasOption('o')){
+                outputDirectory = cmd.getOptionValue("o"); 
+            }
+            
+            if(cmd.hasOption('i')){
+                inputFile = cmd.getOptionValue("i"); 
+            }
+            
+            if(cmd.hasOption('c')){
+                parameterConfigFile = cmd.getOptionValue("c"); 
+            }
+            
+            if(cmd.hasOption('p')){
+                onlyExtractParameters  = true;
+            }
+            
+       }catch(IllegalArgumentException e){
+           
+       } catch (ParseException ex) {
+//            java.util.logging.Logger.getLogger(HuaweiCMObjectParser.class.getName()).log(Level.SEVERE, null, ex);
+        }
+       
+      
+      
+
         try{
+            
+            if(showVersion == true ){
+                System.out.println(VERSION);
+                System.out.println("Copyright (c) 2019 Bodastage Solutions(http://www.bodastage.com)");
+                System.exit(0);
+            }
+            
             //show help
-            if(args.length != 2 || (args.length == 1 && args[0] == "-h")){
-                showHelp();
-                System.exit(1);
-            }
-            //Get bulk CM XML file to parse.
-            String filename = args[0];
-            String outputDirectory = args[1];
-            
-            //Confirm that the output directory is a directory and has write 
-            //privileges
-            File fOutputDir = new File(outputDirectory);
-            if(!fOutputDir.isDirectory()) {
-                System.err.println("ERROR: The specified output directory is not a directory!.");
-                System.exit(1);
-            }
-            
-            if(!fOutputDir.canWrite()){
-                System.err.println("ERROR: Cannot write to output directory!");
-                System.exit(1);            
+            if( showHelpMessage == true || 
+                inputFile == null || 
+                ( outputDirectory == null && onlyExtractParameters == false) ){
+                     HelpFormatter formatter = new HelpFormatter();
+                     String header = "Parses Nokia RAML2.0 configuration management XML data files to csv.\n\n";
+                     String footer = "\n";
+                     footer += "Examples: \n";
+                     footer += "java -jar boda-nokiacmdataparser.jar -i bulkcm_dump.xml -o out_folder\n";
+                     footer += "java -jar boda-nokiacmdataparser.jar -i input_folder -o out_folder\n";
+                     footer += "java -jar boda-nokiacmdataparser.jar -i input_folder -p\n";
+                     footer += "java -jar boda-nokiacmdataparser.jar -i input_folder -p -m\n";
+                     footer += "\nCopyright (c) 2019 Bodastage Solutions(http://www.bodastage.com)";
+                     formatter.printHelp( "java -jar boda-nokiacmdataparser.jar", header, options, footer );
+                     System.exit(0);
             }
         
-            NokiaCMDataParser parser = new NokiaCMDataParser();
-            parser.setDataSource(filename);
-            parser.setOutputDirectory(outputDirectory);
-            parser.parse();
-            parser.printExecutionTime();
+            //Confirm that the output directory is a directory and has write 
+            //privileges
+            if(outputDirectory != null ){
+                File fOutputDir = new File(outputDirectory);
+                if (!fOutputDir.isDirectory()) {
+                    System.err.println("ERROR: The specified output directory is not a directory!.");
+                    System.exit(1);
+                }
+
+                if (!fOutputDir.canWrite()) {
+                    System.err.println("ERROR: Cannot write to output directory!");
+                    System.exit(1);
+                }
+            }
+            
+            //Get parser instance
+            NokiaCMDataParser cmParser = new NokiaCMDataParser();
+
+            
+            if(onlyExtractParameters == true ){
+                cmParser.setExtractParametersOnly(true);
+            }
+            
+            if(  parameterConfigFile != null ){
+                File f = new File(parameterConfigFile);
+                if(f.isFile()){
+                    cmParser.setParameterFile(parameterConfigFile);
+                    cmParser.getParametersToExtract(parameterConfigFile);
+                    cmParser.parserState = ParserStates.EXTRACTING_VALUES;
+                }
+            }
+            
+            cmParser.setDataSource(inputFile);
+            if(outputDirectory != null ) cmParser.setOutputDirectory(outputDirectory);
+            
+            cmParser.parse();
         }catch(Exception e){
             System.out.println(e.getMessage());
             System.exit(1);
         }
+        
+      
     }
     
+  /**
+     * Extract parameter list from  parameter file
+     * 
+     * @param filename 
+     */
+    public  void getParametersToExtract(String filename) throws FileNotFoundException, IOException{
+        BufferedReader br = new BufferedReader(new FileReader(filename));
+        for(String line; (line = br.readLine()) != null; ) {
+           String [] moAndParameters =  line.split(":");
+           String mo = moAndParameters[0];
+           String [] parameters = moAndParameters[1].split(",");
+           
+           Stack parameterStack = new Stack();
+           for(int i =0; i < parameters.length; i++){
+               parameterStack.push(parameters[i]);
+           }
+           
+           moColumns.put(mo, parameterStack);
+
+        }
+        
+        //Move to the parameter value extraction stage
+        //parserState = ParserStates.EXTRACTING_VALUES;
+    }
     
     /**
      * Show parser help.
@@ -283,6 +443,26 @@ public class NokiaCMDataParser
 
     }
     
+
+    /**
+     * Reset parser variables before next file
+     */
+    public void resetVariables(){
+        //Reset variables
+            tagData = "";
+            baseFileName = "";
+            moClassName = null;
+            moDistName = null;
+            moVersion = null;
+            moId = null;
+            inItem = false;
+            inHead = false;
+            listName = null;
+            dateTime = null;
+            parameterName = null;
+            pAttrName = null;
+    }
+    
     /**
      * Parser entry point 
      * 
@@ -299,7 +479,10 @@ public class NokiaCMDataParser
 
             parserState = ParserStates.EXTRACTING_VALUES;
         }
-
+        
+        //Reset variables
+        resetVariables();
+        
         //Extracting values
         if (parserState == ParserStates.EXTRACTING_VALUES) {
             processFileOrDirectory();
@@ -343,8 +526,7 @@ public class NokiaCMDataParser
                         break;
                 }
             }
-            //
-            closeMOPWMap();
+
     }
     
     /**
@@ -513,9 +695,10 @@ public class NokiaCMDataParser
             parameterName = null;
         }
         
+        //Collect the managed object parameter values
         if(qName.equals("managedObject")){
             //System.out.println("managedObject:" + moClassName);
-            String paramNames = "FileName,dateTime,version,distName,id";
+            String paramNames = "FILENAME,DATETIME,VERSION,DISTNAME,MOID";
             String paramValues = baseFileName+ "," + dateTime + ","+moVersion+","+moDistName+","+moId;
             
             if(ParserStates.EXTRACTING_PARAMETERS == parserState){
@@ -536,7 +719,6 @@ public class NokiaCMDataParser
                         columns.add(me.getKey());
                     }
                 }
-                
             }
             
             
@@ -552,6 +734,13 @@ public class NokiaCMDataParser
                     
                     
                     for(int i =0; i < columns.size(); i++){
+                        
+                        String pName = columns.get(i).toString();
+                        if(pName.equals("FILENAME") || pName.equals("DATETIME") 
+                            || pName.equals("VERSION") || pName.equals("DISTNAME") 
+                            || pName.equals("MOID")){
+                            continue;
+                        }
                         paramNames += "," + columns.get(i);
                     }
                     moiPrintWriters.get(moClassName).println(paramNames);
@@ -560,6 +749,13 @@ public class NokiaCMDataParser
                 //Extract parameter values
                 for(int i=0; i < columns.size(); i++){
                     String pName = columns.get(i).toString();
+                    
+                    if(pName.equals("FILENAME") || pName.equals("DATETIME") 
+                        || pName.equals("VERSION") || pName.equals("DISTNAME") 
+                        || pName.equals("MOID")){
+                        continue;
+                    }
+                    
                     if( moiParameterValueMap.containsKey(pName)){
                         paramValues += "," + toCSVFormat(moiParameterValueMap.get(pName));
                     }else{
