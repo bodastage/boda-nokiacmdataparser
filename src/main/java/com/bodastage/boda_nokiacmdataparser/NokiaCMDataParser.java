@@ -38,16 +38,19 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class NokiaCMDataParser 
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(NokiaCMDataParser.class);
     
     /**
      * Current version
      * 
      * @since  1.1.0
      */
-    final static public String VERSION = "2.2.0";
+    final static public String VERSION = "2.2.1";
     
     /**
      * Tracks Managed Object attributes to write to file. This is dictated by 
@@ -260,8 +263,6 @@ public class NokiaCMDataParser
         }
        
       
-      
-
         try{
             
             if(showVersion == true ){
@@ -661,7 +662,7 @@ public class NokiaCMDataParser
         EndElement endElement = xmlEvent.asEndElement();
         String prefix = endElement.getName().getPrefix();
         String qName = endElement.getName().getLocalPart();
-        
+
         if(qName.equals("head")){
             inHead = false;
         }
@@ -697,12 +698,16 @@ public class NokiaCMDataParser
         
         //Collect the managed object parameter values
         if(qName.equals("managedObject")){
+            //Skip MO if it is not in the parameterfile
+            if(!moColumns.containsKey(moClassName) && parameterFile != null){
+                return;
+            }
+            
             //System.out.println("managedObject:" + moClassName);
             String paramNames = "FILENAME,DATETIME,VERSION,DISTNAME,MOID";
             String paramValues = baseFileName+ "," + dateTime + ","+moVersion+","+moDistName+","+moId;
             
             if(ParserStates.EXTRACTING_PARAMETERS == parserState){
-
                 if(!moColumns.containsKey(moClassName)){
                     moColumns.put(moClassName, new Stack());
                 }
@@ -725,16 +730,18 @@ public class NokiaCMDataParser
             if(ParserStates.EXTRACTING_VALUES == parserState){
                 Stack columns  = moColumns.get(moClassName);
                 
+                if (columns.size() == 0){
+//                    moiParameterValueMap.clear();
+//                    moClassName = null;
+                    return;
+                }
+            
                 //Create print writer and write the file header to it
                 if( !moiPrintWriters.containsKey(moClassName)){
-
                     String moiFile = outputDirectory + File.separatorChar + moClassName +  ".csv";
                     moiPrintWriters.put(moClassName, new PrintWriter(moiFile));
 
-                    
-                    
                     for(int i =0; i < columns.size(); i++){
-                        
                         String pName = columns.get(i).toString();
                         if(pName.equals("FILENAME") || pName.equals("DATETIME") 
                             || pName.equals("VERSION") || pName.equals("DISTNAME") 
